@@ -1,0 +1,8 @@
+[
+  {
+    "name": "c",
+    "packageName": "treesitter_c",
+    "url": "https://github.com/tree-sitter/tree-sitter-c.git",
+    "version": "0.20.0"
+  }
+]
