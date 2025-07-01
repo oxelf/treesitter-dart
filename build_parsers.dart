@@ -281,6 +281,43 @@ Future<String> _compileToObject(String inputPath, String outputPath) async {
   return outputPath;
 }
 
+void fixPermissions(String path) {
+  // Fix files: 644 (rw-r--r--)
+  Process.runSync('find', [
+    path,
+    '-type',
+    'f',
+    '-exec',
+    'chmod',
+    '644',
+    '{}',
+    '+',
+  ]);
+  // Fix directories: 755 (rwxr-xr-x)
+  Process.runSync('find', [
+    path,
+    '-type',
+    'd',
+    '-exec',
+    'chmod',
+    '755',
+    '{}',
+    '+',
+  ]);
+}
+
+void fixOwnership(String path) {
+  final user = Platform.environment['USER'];
+  if (user != null) {
+    final result = Process.runSync('chown', ['-R', '$user', path]);
+    if (result.exitCode != 0) {
+      print('Failed to chown: ${result.stderr}');
+    }
+  } else {
+    print('USER environment variable not found. Skipping chown.');
+  }
+}
+
 Future<void> createPackage(String name, String buildPath) async {
   var packageName = "treesitter_$name";
   if (Directory('./parsers/$packageName()').existsSync()) {
@@ -299,8 +336,12 @@ Future<void> createPackage(String name, String buildPath) async {
     print('✅ Failed to create package: ${result.stderr}');
     return;
   }
+  fixOwnership('./parsers/$packageName');
+  fixPermissions('./parsers/$packageName');
   await copyParsers(packageName, name, buildPath);
   await setupPlatforms(packageName, name);
+  await setupPubspec(packageName, "./parsers/$packageName");
+  await setupLib(packageName, "./parsers/$packageName", name);
   print('Created package for $name at ./parsers/treesitter_$name');
 }
 
@@ -355,8 +396,31 @@ Future<void> setupPlatforms(String packageName, String parserName) async {
     final podspecFile = File(podspecPath);
     String content;
 
-    if (!podspecFile.existsSync()) {
-      content = '''
+    //Pod::Spec.new do |s|
+    //  s.name             = 'treesitter'
+    //  s.version          = '0.0.1'
+    //  s.summary          = 'A new Flutter FFI plugin project.'
+    //  s.description      = <<-DESC
+    //A new Flutter FFI plugin project.
+    //                       DESC
+    //  s.homepage         = 'http://example.com'
+    //  s.license          = { :file => '../LICENSE' }
+    //  s.author           = { 'Your Company' => 'email@example.com' }
+    //
+    //  # This will ensure the source files in Classes/ are included in the native
+    //  # builds of apps using this FFI plugin. Podspec does not support relative
+    //  # paths, so Classes contains a forwarder C file that relatively imports
+    //  # `../src/*` so that the C sources can be shared among all target platforms.
+    //  s.source           = { :path => '.' }
+    //  s.source_files = 'Classes/**/*'
+    //  s.dependency 'Flutter'
+    //  s.platform = :ios, '12.0'
+    //
+    //  # Flutter.framework does not contain a i386 slice.
+    //  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
+    //  s.swift_version = '5.0'
+    //end
+    content = '''
 Pod::Spec.new do |s|
   s.name             = '$packageName'
   s.version          = '0.0.1'
@@ -366,41 +430,136 @@ Pod::Spec.new do |s|
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'Generated' => 'noreply@example.com' }
   s.source           = { :git => 'https://example.com/repo.git', :tag => 'v0.0.1' }
-  s.platform         = :$platform, '11.0'
+  s.platform         = :$platform, '12.0'
   $vendoredLine
+
+  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
+  s.swift_version = '5.0'
 end
 ''';
-      print('📄 Created new podspec at $podspecPath');
-    } else {
-      content = await podspecFile.readAsString();
-
-      if (content.contains('s.vendored_frameworks')) {
-        content = content.replaceAllMapped(
-          RegExp(r"s\.vendored_frameworks\s*=.*"),
-          (_) => vendoredLine,
-        );
-        print('🔁 Updated vendored_frameworks in $podspecPath');
-      } else {
-        final match = RegExp(
-          r'^\s*end\s*$',
-          multiLine: true,
-        ).firstMatch(content);
-        if (match != null) {
-          final insertPos = match.start;
-          content =
-              content.substring(0, insertPos) +
-              '  $vendoredLine\n' +
-              content.substring(insertPos);
-          print('➕ Inserted vendored_frameworks in $podspecPath');
-        } else {
-          content += '\n$vendoredLine\nend\n';
-          print('⚠️ No `end` found, appended line in $podspecPath');
-        }
-      }
-    }
-
     await podspecFile.writeAsString(content);
+    print('📄 Created new podspec at $podspecPath');
   }
 
   print('✅ Finished setup for $packageName ($parserName)');
+}
+
+Future<void> setupPubspec(String packageName, String packagePath) async {
+  final pubspecFile = File('$packagePath/pubspec.yaml');
+
+  final content = '''
+name: $packageName
+description: Tree-sitter parser for $packageName
+version: 0.0.1
+environment:
+  sdk: ^3.7.2
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  treesitter:
+    git:
+      url: https://github.com/oxelf/treesitter-dart
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
+      ios:
+        ffiPlugin: true
+      linux:
+        ffiPlugin: true
+      macos:
+        ffiPlugin: true
+      windows:
+        ffiPlugin: true
+''';
+
+  pubspecFile.writeAsStringSync(content);
+  print('✅ Wrote pubspec.yaml for $packageName at $packagePath');
+}
+
+//import 'dart:ffi';
+//import 'dart:io';
+//import 'package:ffi/ffi.dart';
+//
+//import 'package:treesitter/treesitter.dart';
+//
+//final DynamicLibrary _lib = () {
+//  if (Platform.isMacOS || Platform.isIOS) {
+//    return DynamicLibrary.open('tree_sitter_c.framework/tree_sitter_c');
+//  } else if (Platform.isAndroid) {
+//    return DynamicLibrary.open('libtree_sitter_c.so');
+//  } else if (Platform.isLinux) {
+//    return DynamicLibrary.open('libtree_sitter_c.so');
+//  } else if (Platform.isWindows) {
+//    return DynamicLibrary.open('tree_sitter_c.dll');
+//  } else {
+//    throw UnsupportedError('Unsupported platform');
+//  }
+//}();
+//
+//final Pointer<Void> Function() _languageFn = _lib
+//    .lookup<NativeFunction<Pointer<Void> Function()>>('tree_sitter_c')
+//    .asFunction();
+//
+//class TreeSitterCLanguage extends TreeSitterLanguage {
+//  @override
+//  String get languageId => 'c';
+//
+//  @override
+//  dynamic getLanguagePtr() {
+//    return _languageFn().address;
+//  }
+//}
+
+Future<void> setupLib(
+  String packageName,
+  String packagePath,
+  String name,
+) async {
+  final file = File('$packagePath/lib/tree_sitter_$name.dart');
+  Directory('$packagePath/lib').deleteSync(recursive: true);
+  Directory('$packagePath/lib').createSync(recursive: true);
+
+  final content = '''
+import 'dart:ffi';
+import 'dart:io';
+import 'package:ffi/ffi.dart';
+
+import 'package:treesitter/treesitter.dart';
+
+final DynamicLibrary _lib = () {
+  if (Platform.isMacOS || Platform.isIOS) {
+    return DynamicLibrary.open('tree_sitter_c.framework/tree_sitter_c');
+  } else if (Platform.isAndroid) {
+    return DynamicLibrary.open('libtree_sitter_c.so');
+  } else if (Platform.isLinux) {
+    return DynamicLibrary.open('libtree_sitter_c.so');
+  } else if (Platform.isWindows) {
+    return DynamicLibrary.open('tree_sitter_c.dll');
+  } else {
+    throw UnsupportedError('Unsupported platform');
+  }
+}();
+
+final Pointer<Void> Function() _languageFn = _lib
+    .lookup<NativeFunction<Pointer<Void> Function()>>('tree_sitter_c')
+    .asFunction();
+
+class TreeSitterCLanguage extends TreeSitterLanguage {
+  @override
+  String get languageId => 'c';
+
+  @override
+  dynamic getLanguagePtr() {
+    return _languageFn().address;
+  }
+}
+''';
+
+  file.writeAsStringSync(content);
+  print('✅ Wrote ${file.path} for $packageName at $packagePath');
 }
