@@ -203,7 +203,16 @@ packages:
   treesitter:
     dependency: "direct main"
     description:
-      path: ".."
+      path: "."
+      ref: HEAD
+      resolved-ref: "106a1a41c6b26c7ac29dfb84f407b793fafabec3"
+      url: "https://github.com/oxelf/treesitter-dart"
+    source: git
+    version: "0.0.1"
+  treesitter_c:
+    dependency: "direct main"
+    description:
+      path: "../parsers/treesitter_c"
       relative: true
     source: path
     version: "0.0.1"

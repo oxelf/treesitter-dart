@@ -427,10 +427,9 @@ Pod::Spec.new do |s|
   s.summary          = 'Tree-sitter parser for $parserName'
   s.description      = 'Auto-generated parser wrapper for $parserName.'
   s.homepage         = 'https://example.com'
-  s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'Generated' => 'noreply@example.com' }
   s.source           = { :git => 'https://example.com/repo.git', :tag => 'v0.0.1' }
-  s.platform         = :$platform, '12.0'
+  ${platform == "macos" ? "s.platform = :osx, '10.11'" : "s.platform = :ios, '12.0'"}
   $vendoredLine
 
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
@@ -527,31 +526,29 @@ Future<void> setupLib(
   final content = '''
 import 'dart:ffi';
 import 'dart:io';
-import 'package:ffi/ffi.dart';
 
-import 'package:treesitter/treesitter.dart';
+import 'package:treesitter/src/tree_sitter_abstract.dart';
 
 final DynamicLibrary _lib = () {
   if (Platform.isMacOS || Platform.isIOS) {
-    return DynamicLibrary.open('tree_sitter_c.framework/tree_sitter_c');
-  } else if (Platform.isAndroid) {
-    return DynamicLibrary.open('libtree_sitter_c.so');
-  } else if (Platform.isLinux) {
-    return DynamicLibrary.open('libtree_sitter_c.so');
+    return DynamicLibrary.process();
+  } else if (Platform.isLinux || Platform.isFuchsia || Platform.isAndroid) {
+    return DynamicLibrary.open('libtree_sitter_$name.so');
   } else if (Platform.isWindows) {
-    return DynamicLibrary.open('tree_sitter_c.dll');
+    return DynamicLibrary.open('tree_sitter_$name.dll');
   } else {
     throw UnsupportedError('Unsupported platform');
   }
 }();
 
-final Pointer<Void> Function() _languageFn = _lib
-    .lookup<NativeFunction<Pointer<Void> Function()>>('tree_sitter_c')
-    .asFunction();
+final Pointer<Void> Function() _languageFn =
+    _lib
+        .lookup<NativeFunction<Pointer<Void> Function()>>('tree_sitter_$name')
+        .asFunction();
 
-class TreeSitterCLanguage extends TreeSitterLanguage {
+class TreeSitter$name extends TreeSitterLanguage {
   @override
-  String get languageId => 'c';
+  String get languageId => '$name';
 
   @override
   dynamic getLanguagePtr() {

@@ -1,15 +1,12 @@
 import 'dart:ffi';
 import 'dart:io';
-import 'package:ffi/ffi.dart';
 
-import 'package:treesitter/treesitter.dart';
+import 'package:treesitter/src/tree_sitter_abstract.dart';
 
 final DynamicLibrary _lib = () {
   if (Platform.isMacOS || Platform.isIOS) {
-    return DynamicLibrary.open('tree_sitter_c.framework/tree_sitter_c');
-  } else if (Platform.isAndroid) {
-    return DynamicLibrary.open('libtree_sitter_c.so');
-  } else if (Platform.isLinux) {
+    return DynamicLibrary.process();
+  } else if (Platform.isLinux || Platform.isFuchsia || Platform.isAndroid) {
     return DynamicLibrary.open('libtree_sitter_c.so');
   } else if (Platform.isWindows) {
     return DynamicLibrary.open('tree_sitter_c.dll');
@@ -18,11 +15,12 @@ final DynamicLibrary _lib = () {
   }
 }();
 
-final Pointer<Void> Function() _languageFn = _lib
-    .lookup<NativeFunction<Pointer<Void> Function()>>('tree_sitter_c')
-    .asFunction();
+final Pointer<Void> Function() _languageFn =
+    _lib
+        .lookup<NativeFunction<Pointer<Void> Function()>>('tree_sitter_c')
+        .asFunction();
 
-class TreeSitterCLanguage extends TreeSitterLanguage {
+class TreeSitterc extends TreeSitterLanguage {
   @override
   String get languageId => 'c';
 

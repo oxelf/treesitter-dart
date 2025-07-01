@@ -12,7 +12,7 @@ REPO="https://github.com/tree-sitter/tree-sitter"
 DIR="tree-sitter"
 OUTPUT_DIR="$(pwd)/output"
 BASE_DIR="$(pwd)"
-XCFRAMEWORK_NAME="TreeSitter.xcframework"
+XCFRAMEWORK_NAME="libtree-sitter.xcframework"
 
 echo "[+] Cleaning output directory..."
 rm -rf "$OUTPUT_DIR"
@@ -31,21 +31,21 @@ echo "[+] Building macOS static library..."
 MACOS_BUILD_DIR="$OUTPUT_DIR/macos"
 mkdir -p "$MACOS_BUILD_DIR"
 clang $CFLAGS -arch arm64 -arch x86_64 $INCLUDES -c lib.c -o "$MACOS_BUILD_DIR/libtree-sitter-macos.o"
-libtool -static "$MACOS_BUILD_DIR/libtree-sitter-macos.o" -o "$MACOS_BUILD_DIR/libtree-sitter-macos.a"
+libtool -static "$MACOS_BUILD_DIR/libtree-sitter-macos.o" -o "$MACOS_BUILD_DIR/libtree-sitter.a"
 
 # Compile for iOS device
 echo "[+] Building iOS (device) static library..."
 IOS_BUILD_DIR="$OUTPUT_DIR/ios"
 mkdir -p "$IOS_BUILD_DIR"
 xcrun --sdk iphoneos clang $CFLAGS -arch arm64 -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" $INCLUDES -c lib.c -o "$IOS_BUILD_DIR/libtree-sitter-ios.o"
-libtool -static "$IOS_BUILD_DIR/libtree-sitter-ios.o" -o "$IOS_BUILD_DIR/libtree-sitter-ios.a"
+libtool -static "$IOS_BUILD_DIR/libtree-sitter-ios.o" -o "$IOS_BUILD_DIR/libtree-sitter.a"
 
 # Compile for iOS simulator (arm64 + x86_64)
 echo "[+] Building iOS Simulator static library..."
 SIM_BUILD_DIR="$(pwd)/../../../sim"
 mkdir -p "$SIM_BUILD_DIR"
 xcrun --sdk iphonesimulator clang $CFLAGS -arch arm64 -arch x86_64 -isysroot "$(xcrun --sdk iphonesimulator --show-sdk-path)" $INCLUDES -c lib.c -o "$SIM_BUILD_DIR/libtree-sitter-sim.o"
-libtool -static "$SIM_BUILD_DIR/libtree-sitter-sim.o" -o "$SIM_BUILD_DIR/libtree-sitter-sim.a"
+libtool -static "$SIM_BUILD_DIR/libtree-sitter-sim.o" -o "$SIM_BUILD_DIR/libtree-sitter.a"
 
 cd ../../../
 
@@ -53,9 +53,9 @@ cd ../../../
 echo "[+] Creating .xcframework..."
 rm -rf "$OUTPUT_DIR/$XCFRAMEWORK_NAME"
 xcodebuild -create-xcframework \
-  -library "$IOS_BUILD_DIR/libtree-sitter-ios.a" -headers "$DIR/lib/include" \
-  -library "$SIM_BUILD_DIR/libtree-sitter-sim.a" -headers "$DIR/lib/include" \
-  -library "$MACOS_BUILD_DIR/libtree-sitter-macos.a" -headers "$DIR/lib/include" \
+  -library "$IOS_BUILD_DIR/libtree-sitter.a" -headers "$DIR/lib/include" \
+  -library "$SIM_BUILD_DIR/libtree-sitter.a" -headers "$DIR/lib/include" \
+  -library "$MACOS_BUILD_DIR/libtree-sitter.a" -headers "$DIR/lib/include" \
   -output "$OUTPUT_DIR/$XCFRAMEWORK_NAME"
 
 # Cleanup build dirs
@@ -75,7 +75,7 @@ gunzip -f "$OUTPUT_DIR/tree-sitter-linux-x64.gz"
 curl -L "$BASE_URL/web-tree-sitter.js" -o "$OUTPUT_DIR/web-tree-sitter.js"
 curl -L "$BASE_URL/web-tree-sitter.wasm" -o "$OUTPUT_DIR/web-tree-sitter.wasm"
 
-cp  -R $OUTPUT_DIR/TreeSitter.xcframework "$BASE_DIR/macos/TreeSitter.xcframework"
-cp  -R $OUTPUT_DIR/TreeSitter.xcframework "$BASE_DIR/ios/TreeSitter.xcframework"
+cp  -R $OUTPUT_DIR/$XCFRAMEWORK_NAME "$BASE_DIR/macos/$XCFRAMEWORK_NAME"
+cp  -R $OUTPUT_DIR/$XCFRAMEWORK_NAME "$BASE_DIR/ios/$XCFRAMEWORK_NAME"
 
 echo "[✓] Done. Output is in: $OUTPUT_DIR"
